@@ -1,0 +1,133 @@
+---
+title : Optimum Debt replication
+author : Evan Hart
+date: June 2021
+---
+
+
+
+
+scoop from the appendix: optimal asset holdings ``\alpha``
+
+page 195 of technical appendix 
+
+The computational task, therefore, is to find an approximation for ``\alpha(x,i)``, ``\alpha^h(x,i)``  which implies that ``\int R(x,i;\alpha^h) *N_e(x) dx = 0 `` 
+is approximately equal to zero for all x and i. We do this by applying a finite element method. 
+
+
+
+```julia
+
+function alpha_approximation(Ψ_e,Ψ_e2,x,xvec)
+x_e = xvec[1]
+x_e2 = xvec[2]
+N_e = (x_e2 -x)/(x_e2 - x_e)
+N_e2 = (x-x_e)/(x_e2 - x_e)
+α = Ψ_e* N_e + Ψ_e2* N_e2
+
+return α
+end
+```
+```julia
+using Parameters # mutable structure 
+# parameterization for our benchmark
+@with_kw mutable struct BenchmarkParameters
+    g::Float64 = 0.0185 # growth rate
+    γ::Float64 = 0.217  # ratio of government purchases to GDP
+    χ::Float64 = 0.082  # ratio of government tranfers to GDP
+    b::Float64 = 2/3    # average of the US federal plus US state debt divided by gross domestic product over the post-war period
+    θ::Float64 = 0.3   # labor’s share of income equal to 70%
+    k::Float64 = 2.5    # capital output ratio
+    δ::Float64 = 0.075 #Depreciation Rate
+    ρ::Float64 = 0.6 #  parameter values for the earnings process are in the range of estimates in the literature
+    σ::Float64 = 0.3# (See Aiyagari (1994a) for a discussion of these estimates
+    η::Float64 = 0.328
+    μ::Float64 = 1.5
+    β::Float64 = 0.991 #Discount Factor
+end;
+```
+
+
+
+Equation 7 in appendix
+```julia
+function R(BenchmarkParameters, e, r)
+@unpack g,χ,γ,b,θ = BenchmarkParameters
+Ψ_e = 0.2
+Ψ_e2 = 0.1
+x = 2
+xvec = [1 , 2]
+
+t_y = (γ+ χ+(r_bar-g)*b)/(1-δ*k) # pg 458 eq (15)
+wr = 1-θ# pg 461
+kr = θ/(r+δ)# pg 461
+A = (1-η)/[ η* (1-ty)*(1- θ) ] # pg 461
+B = 1 - γ- θ*(g+ δ)/(r+ δ) # pg 461
+N = 1/(1+A*B) # pg 461
+r_bar = (1-t_y)*r # eq (12) from main paper
+w_bar = (1-t_y)*wr/N# eq (16) from main paper
+# α_bar = kr+b
+sum = sum(πi .*  (1+r_bar)*(1+r_bar) *alpha_approximation(Ψ_e,Ψ_e2,x,xvec) * w_bar*e 
+.+  χ - (1+g) *alpha_approximation(Ψ_e,Ψ_e2,alpha_approximation(Ψ_e,Ψ_e2,x,xvec),xvec))
+
+R = (1+g) * [ (1+r_bar)*x + w_bar* e[i] + χ - (1+g)* alpha_approximation(Ψ_e,Ψ_e2,x,xvec) ]^(-υ)   
+- β*(1+g)^(1-υ)* (sum^(-υ)  + ζ* minimum( alpha_approximation(Ψ_e,Ψ_e2,x,xvec),0))^2  
+end
+
+
+```
+
+
+
+Local interpolations are assembled to construct a globally defined piecewise approximation. 
+In our case we choose linear basis functions for all elements,
+
+
+
+
+
+
+
+
+
+JUNK
+
+
+In particular, we do the following. 
+First, we choose some discretization of the domain of our functions. 
+Since only x is continuous, we need to specify some partition of ``[0,x_{max}]``. 
+where xmax is such that no x > xmax would be chosen by the consumer.
+We refer to each subinterval of x as an element.
+On each element we choose a set of basis functions for approximating ``\alpha``. 
+that is, we assume ``\alpha^h`` can be represented as a weighted sum of basis functions, 
+where the weights and basis functions may be different for each element. 
+In our case, we choose linear basis functions for all elements;
+
+ The solution to the consumer’s problem yields a decision rule for asset accumulation:
+```math
+\tilde{a}_{t+1} = \alpha( \tilde{a_t},e_t;r, \gamma, b, g)
+```
+This decision rule can be used, together with the Markov process for the labor productivity shock `` e_t `` 
+to calculate the stationary joint distribution of assets and the productivity shock, denoted by ``H(\tilde{a},e;r;\gamma,b,g) ``
+This stationary distribution then implies an expression for per capita assets,
+ ```math
+  \bar{a} = \int \int \tilde{a} dH = \bar{\alpha}(r, \gamma, b, g)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```julia
+# using Weave; weave("/Users/modelt/Documents/Julia/Julia Spring 2021/Computation/optimum debt/optimumdebt.jmd",doctype="md2html")
+```
