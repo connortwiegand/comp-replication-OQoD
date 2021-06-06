@@ -1,18 +1,24 @@
 using Pkg,  LinearAlgebra, Parameters, Roots#, Gadfly, BasisMatrices, Optim, Plots, DataFrames, FastGaussQuadrature
 
 @with_kw mutable struct RParams
-    g::Float64  = 0.0185 # growth rate
-    χ::Float64 = 0.082 # ratio of government tranfers to GDP
+    #Production Params
+    g::Float64  = 0.0185 # growth rate -- rate of technical progress
     δ::Float64 = 0.075 # depreciation
-    ρ::Float64 = 0.6 # 
-    μ::Float64 = 1.5 #
-    γ::Float64 = 0.217 # ratio of government purchases to GDP
     θ::Float64 = 0.3 # captial’s share of income
-    η::Float64 = 0.328 #
-    σ::Float64 = 0.3 #
-    β::Float64 = 0.991 # discount factor
+    #Utility Params
+    μ::Float64 = 1.5 # risk aversion parameter
+    η::Float64 = 0.328 # related to labor elasticity -- consumption's share of utility
+    β::Float64 = 0.991 # discount factor (0.998 in transfored economy)
+    #Economy Params
+    χ::Float64 = 0.082 # transfers -- ratio of government tranfers to GDP 
+    γ::Float64 = 0.217 # government purchases -- ratio of government purchases to GDP 
     k::Float64 = 2.5 # capital output ratio
     b::Float64 = 2/3 # debt:GDP ratio
+    #Labor Productivity is log AR(1) -- log(e_t) ~ AR(1) 
+    ρ::Float64 = 0.6 # AR(1) coefficient
+    σ::Float64 = 0.3 # AR(1) s.d.
+    
+    
 end
 
 """
