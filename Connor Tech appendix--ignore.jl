@@ -44,7 +44,7 @@ N, r_l, and r_u are guessed
 tol is a tolerance level
 
 Need methods for computing α and H to do this part
-
+"""
 
 function try_r(N, r_guess, para::RParams) 
     @unpack g,χ,γ,b,θ = para
@@ -84,4 +84,4 @@ end
 ## Now we need to check N
     ## Use Newton-Raphson, according to TA
 
-"""
+
