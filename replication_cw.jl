@@ -86,6 +86,7 @@ function setupgrids_shocks!(HH::HHModel, curv=1.7)
 
         Vf[s]= Interpoland(abasis,V)
         cf[s]= Interpoland(abasis,c)
+        lf[s]= Interpoland(abasis,l)
     end
 end;
 
