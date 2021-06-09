@@ -1,4 +1,4 @@
-using Pkg,  LinearAlgebra, Parameters, Roots#, Gadfly, BasisMatrices, Optim, Plots, DataFrames, FastGaussQuadrature
+using Pkg,BasisMatrices,LinearAlgebra,Parameters,Roots,Optim,QuantEcon,DataFrames,Gadfly,Arpack
 
 @with_kw mutable struct HHModel
     #Production Params
@@ -32,7 +32,7 @@ using Pkg,  LinearAlgebra, Parameters, Roots#, Gadfly, BasisMatrices, Optim, Plo
     w̄::Float64 = 1.
 
     #Solution -- may need to change this
-    k::Int = 2 #type of interpolation
+    i_type::Int = 2 #type of interpolation -- e.g. 2 = quadratic, **look out for this, used to be called k**
     Vf::Vector{Interpoland} = Interpoland[]
     cf::Vector{Interpoland} = Interpoland[]
     lf::Vector{Interpoland} = Interpoland[] # Unsure
@@ -47,12 +47,12 @@ end
 """
 function U(HH::HHModel, c, l)
     η = HH.η
-    return η * log(c) + (1 - η) * log(l)
+    return η*log.(c) .+ (1-η)*log.(l)
 end
 
 
 """
-    setupgrids_shocks!(HH::HHModel, curv=1.7) -- Started updating
+    setupgrids_shocks!(HH::HHModel, curv=1.7) -- Good to go I think
 
 Set up non-linear grids for interpolation
 
@@ -64,7 +64,7 @@ Notes:
     I think ϵ is David's notation, e(t) is Aiyagari's notation
 """
 function setupgrids_shocks!(HH::HHModel, curv=1.7)
-    @unpack a̲,a̅,Na,ρ_ϵ,σ_ϵ,Nϵ,k,r̄,w̄,β = HH
+    @unpack a̲,a̅,Na,ρ_ϵ,σ_ϵ,Nϵ,i_type,r̄,w̄,β,η,χ = HH
     #Compute grid on A
     agrid = (a̅-a̲).*LinRange(0,1,Na).^curv .+ a̲
 
@@ -74,14 +74,17 @@ function setupgrids_shocks!(HH::HHModel, curv=1.7)
     HH.ϵ = exp.(mc.state_values)
 
     #First guess of interpolation functions
-    abasis = Basis(SplineParams(agrid,0,k))
+    abasis = Basis(SplineParams(agrid,0,i_type))
     a = nodes(abasis)[1]
 
     Vf = HH.Vf = Vector{Interpoland}(undef,Nϵ)
     cf = HH.cf = Vector{Interpoland}(undef,Nϵ)
+    lf = HH.lf = Vector{Interpoland}(undef,Nϵ)
     for s in 1:Nϵ
-        c = @. r̄*a + w̄*HH.ϵ[s] #* ## To Do
-        l =  ## To Do
+        # NOTE: These are guesses! So they can be off
+            # - We will see later if they need to be adjusted, but don't get too caught up on them
+        c = @. r̄*a + w̄*HH.ϵ[s] + χ
+        l = @. (η/(1-η)) * w̄ * HH.ϵ[s] 
         V = U(HH,c,l)./(1-β)
 
         Vf[s]= Interpoland(abasis,V)
@@ -91,29 +94,35 @@ function setupgrids_shocks!(HH::HHModel, curv=1.7)
 end;
 
 
+HH = HHModel()
+setupgrids_shocks!(HH)
 
 """
-    iterate_endogenousgrid(HH,a′grid,cf′)
+    iterate_endogenousgrid(HH,a′grid,cf′) -- Started updating
 
 Iterates on Euler equation using endogenous grid method
 """
 function iterate_endogenousgrid(HH,a′grid,cf′)
-    @unpack γ,ϵ,β,Nϵ,Π,r̄,w̄,a̲= HH
+    @unpack γ,ϵ,β,Nϵ,Π,r̄,w̄,a̲,g= HH
     c′ = zeros(length(a′grid),Nϵ)
     for s in 1:Nϵ
         c′[:,s]= cf′[s](a′grid)
     end
 
-    EERHS = β*(1+r̄)*(c′).^(-γ)*Π' #RHS of Euler Equation
-    c = EERHS.^(-1/γ)
+    EERHS = β*(1+r̄)/(1+g)*(η./c′)*Π' #RHS of Euler Equation
+    c = η * EERHS.^(-1)
 
-    #compute implies assets
-    a = ((c .+ a′grid) .- w̄ .*ϵ')./(1+r̄)
+    #Compute leisure from consumption (using FOCs)
+        #NOTE: I have no idea what needs dots and what doesn't
+    l = ((1-η)/η) * (c/(w̄*ϵ))
+
+    #compute implied assets from BC
+    a = ((c .+ w̄.*ϵ'.*l .+ ((1+g) * a′grid)) .- w̄ .* ϵ' .- χ) ./ (1+r̄) # note: that is ϵ', not ϵ′ -- dumb
 
     cf = Vector{Interpoland}(undef,Nϵ)
     for s in 1:Nϵ
         if a[1,s]> a̲
-            c̲ = r̄*a̲ + w̄*ϵ[s]
+            c̲ = η * ( (r̄-g)*a̲ + w̄*ϵ[s] + χ )
             cf[s]= Interpoland(Basis(SplineParams([a̲; a[:,s]],0,1)),[c̲;c[:,s]])
         else
             cf[s]= Interpoland(Basis(SplineParams(a[:,s],0,1)),c[:,s])
@@ -144,4 +153,4 @@ function solveHHproblem_eg!(HH,verbose=false)
 end
 solveHHproblem_eg!(HH)
 setupgrids_shocks!(HH)
-@time solveHHproblem_eg!(HH);
+
