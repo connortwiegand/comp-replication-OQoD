@@ -91,21 +91,57 @@ function setupgrids_shocks!(HH::HHModel, curv=1.7)
 end;
 
 
-"""
-    optimalPolicy(HH,Vf′) -- Barely started
 
-Computes the  optimalPolicy given value function Vf′ if the state is (a,i)
 """
-function optimalPolicy(HH,a,s,Vf′)
-    @unpack a̲,a̅,β,Π,ϵ,r̄,w̄,Nϵ = HH 
+    iterate_endogenousgrid(HH,a′grid,cf′)
 
-    function objf(a′)
-        c = (1+r̄)*a + ϵ[s]*w̄ - a′
-        return U(HH, c, l) + β*sum(Π[s,s′]*Vf′[s′](a′) for s′ in 1:Nϵ)
+Iterates on Euler equation using endogenous grid method
+"""
+function iterate_endogenousgrid(HH,a′grid,cf′)
+    @unpack γ,ϵ,β,Nϵ,Π,r̄,w̄,a̲= HH
+    c′ = zeros(length(a′grid),Nϵ)
+    for s in 1:Nϵ
+        c′[:,s]= cf′[s](a′grid)
     end
-    a_max = min((1+r̄)*a+ϵ[s]*w̄,a̅)
-    res = maximize(objf,a̲,a_max)
-    a′ = Optim.maximizer(res)
-    #return value and consumption that optimize
-    return (V=objf(a′),c=(1+r̄)*a + ϵ[s]*w̄ - a′)
+
+    EERHS = β*(1+r̄)*(c′).^(-γ)*Π' #RHS of Euler Equation
+    c = EERHS.^(-1/γ)
+
+    #compute implies assets
+    a = ((c .+ a′grid) .- w̄ .*ϵ')./(1+r̄)
+
+    cf = Vector{Interpoland}(undef,Nϵ)
+    for s in 1:Nϵ
+        if a[1,s]> a̲
+            c̲ = r̄*a̲ + w̄*ϵ[s]
+            cf[s]= Interpoland(Basis(SplineParams([a̲; a[:,s]],0,1)),[c̲;c[:,s]])
+        else
+            cf[s]= Interpoland(Basis(SplineParams(a[:,s],0,1)),c[:,s])
+        end
+    end
+    return cf
 end;
+
+
+"""
+    solveHHproblem_eg!(HH)
+
+Solves the HH problem using the endogeneous grid method
+"""
+function solveHHproblem_eg!(HH,verbose=false)
+    a′grid = nodes(HH.cf[1].basis)[1]#Get nodes for interpolation
+    
+    cf′ = iterate_endogenousgrid(HH,a′grid,HH.cf)
+    diff = 1.
+    while diff  > 1e-8
+        HH.cf = iterate_endogenousgrid(HH,a′grid,cf′)
+        diff = maximum(norm(cf′[s](a′grid)-HH.cf[s](a′grid),Inf) for s in 1:HH.Nϵ) 
+        if verbose
+            println(diff)
+        end
+        cf′ = HH.cf
+    end
+end
+solveHHproblem_eg!(HH)
+setupgrids_shocks!(HH)
+@time solveHHproblem_eg!(HH);
