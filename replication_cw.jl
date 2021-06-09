@@ -79,7 +79,7 @@ function setupgrids_shocks!(HH::HHModel, curv=1.7)
 
     Vf = HH.Vf = Vector{Interpoland}(undef,Nϵ)
     cf = HH.cf = Vector{Interpoland}(undef,Nϵ)
-    lf = HH.lf = Vector{Interpoland}(undef,Nϵ)
+    #lf = HH.lf = Vector{Interpoland}(undef,Nϵ)
     for s in 1:Nϵ
         # NOTE: These are guesses! So they can be off
             # - We will see later if they need to be adjusted, but don't get too caught up on them
@@ -89,7 +89,8 @@ function setupgrids_shocks!(HH::HHModel, curv=1.7)
 
         Vf[s]= Interpoland(abasis,V)
         cf[s]= Interpoland(abasis,c)
-        lf[s]= Interpoland(abasis,l)
+        #It doesn't currently run with lf[s]. Unsure if this needed anyay, but maybe try setting i_type = 3
+        ###lf[s]= Interpoland(abasis,l) 
     end
 end;
 
@@ -103,18 +104,18 @@ setupgrids_shocks!(HH)
 Iterates on Euler equation using endogenous grid method
 """
 function iterate_endogenousgrid(HH,a′grid,cf′)
-    @unpack γ,ϵ,β,Nϵ,Π,r̄,w̄,a̲,g= HH
+    @unpack γ,ϵ,β,Nϵ,Π,r̄,w̄,a̲,g,η,χ = HH
     c′ = zeros(length(a′grid),Nϵ)
     for s in 1:Nϵ
         c′[:,s]= cf′[s](a′grid)
     end
 
-    EERHS = β*(1+r̄)/(1+g)*(η./c′)*Π' #RHS of Euler Equation
+    EERHS = β*(1+r̄)/(1+g)*η*(c′).^(-1)*Π' #RHS of Euler Equation
     c = η * EERHS.^(-1)
 
     #Compute leisure from consumption (using FOCs)
         #NOTE: I have no idea what needs dots and what doesn't
-    l = ((1-η)/η) * (c/(w̄*ϵ))
+    l = ((1-η)/η) * (c*(w̄*ϵ).^(-1))
 
     #compute implied assets from BC
     a = ((c .+ w̄.*ϵ'.*l .+ ((1+g) * a′grid)) .- w̄ .* ϵ' .- χ) ./ (1+r̄) # note: that is ϵ', not ϵ′ -- dumb
