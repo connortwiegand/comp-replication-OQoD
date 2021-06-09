@@ -1,4 +1,4 @@
-using Pkg,BasisMatrices,LinearAlgebra,Parameters,Roots,Optim,QuantEcon,DataFrames,Gadfly,Arpack
+using Pkg,BasisMatrices,LinearAlgebra,Parameters,Roots,Optim,QuantEcon,DataFrames,Gadfly,SparseArrays,Arpack
 
 @with_kw mutable struct HHModel
     #Production Params
