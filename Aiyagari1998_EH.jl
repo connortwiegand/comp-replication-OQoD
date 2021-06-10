@@ -15,7 +15,7 @@ using Roots
         #Preference Parameters
         γ::Float64 = 1. #Risk aversion
         η::Float64 = 0.328 # consumption elasticity?            Evan: June 9
-        β::Float64 = 0.985 #Discount Rate
+        β::Float64 = 0.991 #Discount Rate
 
         #Prices
         r̄::Float64 = .01
@@ -27,14 +27,14 @@ using Roots
         Na::Int64 = 100.
 
         #Income Process
-        ρ_ϵ::Float64 = 0.9923
-        σ_ϵ::Float64 = 0.0983
+        ρ_ϵ::Float64 = 0.6
+        σ_ϵ::Float64 = 0.3
         Nϵ::Int64 = 7
         ϵ::Vector{Float64} = zeros(0)
         Π::Matrix{Float64} = zeros(0,0)
 
         #Solution
-        k::Int = 2 #type of interpolation
+        k::Int = 3 #type of interpolation
         Vf::Vector{Interpoland} = Interpoland[]
         cf::Vector{Interpoland} = Interpoland[]
         lf::Vector{Interpoland} = Interpoland[]
@@ -44,8 +44,8 @@ using Roots
         Φ::SparseMatrixCSC{Float64,Int64} = spzeros(0,0)
 
         #additional parameters without a Home
-        χ::Float64 = 0.9923
-        g::Float64 = 0.9923
+        χ::Float64 = 0.082
+        g::Float64 = 0.0185
     end
 
 
@@ -77,7 +77,7 @@ using Roots
         γ = HH.γ
         η = HH.η
         if γ == 1
-            return log.(c.^(η) .* l.^(1-η))
+            return η*log.(c) .+ (1-η)*log.(l)
         else
             return ((c.^(η) .* l.^(1-η)).^(1-γ))./(1-γ)
         end
@@ -93,10 +93,9 @@ using Roots
     Set up non-linear grids for interpolation
     """
     function setupgrids_shocks!(HH::HHModel, curv=1.7)
-        @unpack a̲,a̅,Na,ρ_ϵ,σ_ϵ,Nϵ,k,r̄,w̄,β,χ,γ,η,g = HH
+        @unpack a̲,a̅,Na,ρ_ϵ,σ_ϵ,Nϵ,k,r̄,w̄,β,χ,η,g = HH
         
         #Compute grid on A
-        # grid over l ? 
         agrid = (a̅-a̲).*LinRange(0,1,Na).^curv .+ a̲
 
         #Store markov chain
@@ -113,21 +112,31 @@ using Roots
         lf = HH.cf = Vector{Interpoland}(undef,Nϵ)
         for s in 1:Nϵ
             #------------------------------------------------------------------------------------------------------------------------ 
-            l = 0.5 # fixed l until we get that figured out. 
-            c = @. r̄*a + (1-l)*w̄*HH.ϵ[s] + χ            # Evan June 6
-                #= 
+
+
+            c= @. η*[ (r̄-g)*a + w̄*HH.ϵ[s] + χ  ]
+            l = @.(1-η)/η *c/(w̄*HH.ϵ[s])
+            c=c[1]
+            l=l[1]
+            #l = @. (η/(1-η)) * w̄ * HH.ϵ[s] 
+            V = U(HH,c,l)./(1-β)
+            
+            # junk
+            #= 
+            #l = 0.5 # fixed l until we get that figured out. 
+            #c = @. r̄*a + (1-l)*w̄*HH.ϵ[s] + χ            # Evan June 6
+                
                 Im a bit confused about this, what about saving for next period?
                 This is a budget constraint right hand side
-            =#
-            if γ == 1
+        
                 V = U(HH,c,l)./(1-β)
-            else
-                V = U(HH,c,l)./(1-(β(1+g)^[η(1-γ)] ))
-            end
-            # V = U(HH,c,l)./(1-β)
-                #= 
                 infinite sum  ∑(β(1+g)^[η(1-μ)] )^t  replaces ∑ β^t
                 setting μ to 1 gave us a log utility function. It also cancels growth out of our value funciton
+                if γ == 1
+                    V = U(HH,c,l)./(1-β)
+                else
+                    V = U(HH,c,l)./(1-(β(1+g)^[η(1-γ)] ))
+                end
             =#
             #------------------------------------------------------------------------------------------------------------------------ 
 
@@ -175,17 +184,18 @@ using Roots
     Iterates on Euler equation using endogenous grid method
     """
     function iterate_endogenousgrid(HH,a′grid,cf′)
-        @unpack γ,ϵ,β,Nϵ,Π,r̄,w̄,a̲= HH
+        @unpack ϵ,β,Nϵ,Π,r̄,w̄,a̲= HH
         c′ = zeros(length(a′grid),Nϵ)
         for s in 1:Nϵ
             c′[:,s]= cf′[s](a′grid)
         end
 
-        EERHS = β*(1+r̄)*(c′).^(-γ)*Π' #RHS of Euler Equation
-        c = EERHS.^(-1/γ)
+        EERHS = β*(1+r̄)/(1+g)*η*(c′).^(-1)*Π' #RHS of Euler Equation
+        c = η * EERHS.^(-1)
 
-        #compute implies assets
-        a = ((c .+ a′grid) .- w̄ .*ϵ')./(1+r̄)
+        #compute implied assets from budget constraint
+        #a = ((c .+ a′grid) .- w̄ .*ϵ')./(1+r̄)
+        a = ((c .+ w̄.*ϵ'.*l .+ ((1+g) * a′grid)) .- w̄ .* ϵ' .- χ) ./ (1+r̄)
 
         cf = Vector{Interpoland}(undef,Nϵ)
         for s in 1:Nϵ
@@ -329,10 +339,8 @@ using Roots
 # run functions
 #------------------------------------------------------------------------------------------------  
     AM = AiyagariModel()
-    AM.HH.β = 0.99
+
     setupgrids_shocks!(AM)
-
-
 
 
     # Figure 1: capital steady state: 
