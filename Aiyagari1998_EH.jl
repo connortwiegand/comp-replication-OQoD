@@ -120,7 +120,6 @@ using Roots
     
             Vf[s]= Interpoland(abasis,V)
             cf[s]= Interpoland(abasis,c)
-            #It doesn't currently run with lf[s]. Unsure if this needed anyay, but maybe try setting i_type = 3
             # lf[s]= Interpoland(abasis,l) 
         end
 
@@ -173,11 +172,10 @@ using Roots
         c = η * EERHS.^(-1)
     
         #Compute leisure from consumption (using FOCs)
-            #NOTE: I have no idea what needs dots and what doesn't
         l = (1-η)*c*(w̄*ϵ).^(-1)
     
         #compute implied assets from BC
-        a = ((c .+ w̄.*ϵ'.*l .+ ((1+g) * a′grid)) .- w̄ .* ϵ' .- χ) ./ (1+r̄) # note: that is ϵ', not ϵ′ -- dumb
+        a = ((c .+ w̄.*ϵ'.*l .+ ((1+g) * a′grid)) .- w̄ .* ϵ' .- χ) ./ (1+r̄) 
     
         cf = Vector{Interpoland}(undef,Nϵ)
         for s in 1:Nϵ
